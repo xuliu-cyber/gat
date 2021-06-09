@@ -269,18 +269,19 @@ class GAT(nn.Module):
 
         self.convs = nn.ModuleList()
         self.norms = nn.ModuleList()
+        self.linear = nn.ModuleList()
 
         for i in range(n_layers):
             in_hidden = n_heads * n_hidden if i > 0 else in_feats
             out_hidden = n_hidden if i < n_layers - 1 else n_classes
-            num_heads = n_heads if i < n_layers - 1 else 1
+            # num_heads = n_heads if i < n_layers - 1 else 1
             out_channels = n_heads
 
             self.convs.append(
                 GATConv(
                     in_hidden,
                     out_hidden,
-                    num_heads=num_heads,
+                    num_heads=n_heads,
                     attn_drop=attn_drop,
                     edge_drop=edge_drop,
                     #use_attn_dst=use_attn_dst,
@@ -288,6 +289,7 @@ class GAT(nn.Module):
                     residual=True,
                 )
             )
+            self.linear.append(nn.Linear(in_hidden, out_channels * out_hidden, bias=False))
 
             if i < n_layers - 1:
                 self.norms.append(nn.BatchNorm1d(out_channels * out_hidden))
@@ -304,8 +306,9 @@ class GAT(nn.Module):
 
         for i in range(self.n_layers):
             conv = self.convs[i](graph, h)
+            linear = self.linear[i](h).view(conv.shape)
 
-            h = conv
+            h = conv+linear
 
             if i < self.n_layers - 1:
                 h = h.flatten(1)
@@ -388,7 +391,7 @@ def test(model, g,features, train_mask, val_mask, test_mask, labels, evaluator):
     return train_acc, valid_acc, test_acc
 
 def load_data():
-    dataset = DglNodePropPredDataset(name = 'ogbn-arxiv')
+    dataset = DglNodePropPredDataset(name = 'ogbn-arxiv',root='dataset')
     g, labels = dataset[0]
     evaluator = Evaluator(name = 'ogbn-arxiv')
     split_idx = dataset.get_idx_split()
